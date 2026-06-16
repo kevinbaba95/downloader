@@ -113,6 +113,9 @@ def _run_download(job_id, url, fmt, job_dir):
                 url,
             ]
 
+        JOBS[job_id]["log"].append(f"Running: {' '.join(cmd)}")
+        print(f"[{job_id}] Running: {cmd}", flush=True)
+
         env = {**os.environ, "PYTHONUNBUFFERED": "1"}
         proc = subprocess.Popen(
             cmd,
@@ -122,21 +125,57 @@ def _run_download(job_id, url, fmt, job_dir):
             env=env,
         )
 
+        print(f"[{job_id}] Process started, PID {proc.pid}", flush=True)
+
+        fd = proc.stdout.fileno()
         buf = b""
+        last_output = time.time()
+        NO_OUTPUT_TIMEOUT = 120  # kill if silent for 2 minutes
+
         while True:
+            # check if process already exited with no more data
+            if proc.poll() is not None:
+                try:
+                    remaining = os.read(fd, 65536)
+                    if remaining:
+                        buf += remaining
+                except OSError:
+                    pass
+                break
+
+            # check for no-output timeout
+            if time.time() - last_output > NO_OUTPUT_TIMEOUT:
+                proc.kill()
+                JOBS[job_id]["log"].append(
+                    f"Killed: no output for {NO_OUTPUT_TIMEOUT}s — "
+                    "SoundCloud may be blocking this server, or the URL is invalid."
+                )
+                JOBS[job_id]["status"] = "error"
+                JOBS[job_id]["error"] = "Download timed out — no output from yt-dlp."
+                return
+
+            import select
+            ready, _, _ = select.select([proc.stdout], [], [], 1.0)
+            if not ready:
+                continue
+
             try:
-                chunk = os.read(proc.stdout.fileno(), 4096)
+                chunk = os.read(fd, 4096)
             except OSError:
                 break
             if not chunk:
                 break
+
+            last_output = time.time()
             buf += chunk
             parts = re.split(rb"[\r\n]+", buf)
             for part in parts[:-1]:
                 line = part.decode("utf-8", errors="replace").strip()
                 if line:
                     JOBS[job_id]["log"].append(line)
+                    print(f"[{job_id}] {line}", flush=True)
             buf = parts[-1]
+
         if buf:
             line = buf.decode("utf-8", errors="replace").strip()
             if line:
