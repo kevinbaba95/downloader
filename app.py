@@ -100,6 +100,8 @@ def _run_download(job_id, url, fmt, job_dir):
                 "--output", os.path.join(job_dir, "%(playlist_index)s - %(title)s.%(ext)s"),
                 "--yes-playlist",
                 "--no-overwrites",
+                "--newline",       # force one progress line per newline
+                "--no-colors",
                 url,
             ]
         else:
@@ -110,9 +112,17 @@ def _run_download(job_id, url, fmt, job_dir):
                 url,
             ]
 
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,  # line-buffered
+        )
         for line in proc.stdout:
-            JOBS[job_id]["log"].append(line.rstrip())
+            clean = line.replace("\r", "\n").strip()
+            if clean:
+                JOBS[job_id]["log"].append(clean)
         proc.wait()
 
         if proc.returncode != 0:
