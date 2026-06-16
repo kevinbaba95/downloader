@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Downloader</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: #0f0f0f;
+      font-family: system-ui, sans-serif;
+      color: #e0e0e0;
+      padding: 2rem 1rem;
+    }
+    header {
+      max-width: 680px;
+      margin: 0 auto 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 1.4rem; color: #fff; }
+    header a { color: #888; font-size: 0.85rem; text-decoration: none; }
+    header a:hover { color: #ccc; }
+
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 2rem;
+      max-width: 680px;
+      margin: 0 auto 2rem;
+    }
+
+    label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 0.4rem; }
+
+    input[type="url"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #e0e0e0;
+      font-size: 1rem;
+      outline: none;
+      margin-bottom: 1rem;
+    }
+    input[type="url"]:focus { border-color: #6c47ff; }
+
+    .row { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
+    .format-btn {
+      flex: 1;
+      padding: 0.6rem;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #aaa;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-align: center;
+      user-select: none;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .format-btn.active {
+      border-color: #6c47ff;
+      color: #fff;
+      background: #1e1535;
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 0.8rem;
+      background: #6c47ff;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button[type="submit"]:hover { background: #5a38d9; }
+    button[type="submit"]:disabled { background: #3a2a7a; cursor: not-allowed; }
+
+    /* Status area */
+    #status-area { max-width: 680px; margin: 0 auto; display: none; }
+    #status-area .card { margin-bottom: 1rem; }
+
+    .status-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #6c47ff;
+      flex-shrink: 0;
+    }
+    .dot.done { background: #34d399; }
+    .dot.error { background: #f87171; }
+    .dot.running { animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    #status-text { font-size: 0.95rem; }
+
+    #log {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: #888;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    #files { margin-top: 1rem; }
+    #files h3 { font-size: 0.9rem; color: #aaa; margin-bottom: 0.75rem; }
+    .file-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 0.6rem 0.9rem;
+      margin-bottom: 0.5rem;
+      text-decoration: none;
+      color: #e0e0e0;
+      font-size: 0.9rem;
+    }
+    .file-link:hover { border-color: #6c47ff; }
+    .file-link span { color: #6c47ff; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Downloader</h1>
+    <a href="/logout">Log out</a>
+  </header>
+
+  <div class="card">
+    <form id="dl-form">
+      <label for="url">SoundCloud or Spotify URL</label>
+      <input type="url" id="url" name="url" placeholder="https://soundcloud.com/... or https://open.spotify.com/..." required />
+
+      <label>Format</label>
+      <div class="row" id="format-btns">
+        {% for fmt in formats %}
+        <div class="format-btn {% if loop.first %}active{% endif %}" data-fmt="{{ fmt }}">
+          {{ fmt.upper() }}
+        </div>
+        {% endfor %}
+      </div>
+      <input type="hidden" id="format" name="format" value="{{ formats[0] }}" />
+
+      <button type="submit" id="submit-btn">Download</button>
+    </form>
+  </div>
+
+  <div id="status-area">
+    <div class="card">
+      <div class="status-row">
+        <div class="dot running" id="dot"></div>
+        <span id="status-text">Starting download...</span>
+      </div>
+      <div id="log"></div>
+      <div id="files"></div>
+    </div>
+  </div>
+
+  <script>
+    // Format button toggle
+    const fmtBtns = document.querySelectorAll('.format-btn');
+    const fmtInput = document.getElementById('format');
+    fmtBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        fmtBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        fmtInput.value = btn.dataset.fmt;
+      });
+    });
+
+    // Form submission
+    const form = document.getElementById('dl-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const statusArea = document.getElementById('status-area');
+    const logEl = document.getElementById('log');
+    const statusText = document.getElementById('status-text');
+    const dot = document.getElementById('dot');
+    const filesEl = document.getElementById('files');
+
+    let pollInterval = null;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Starting...';
+      statusArea.style.display = 'block';
+      logEl.textContent = '';
+      filesEl.innerHTML = '';
+      dot.className = 'dot running';
+      statusText.textContent = 'Starting download...';
+
+      const data = new FormData(form);
+      const res = await fetch('/download', { method: 'POST', body: data });
+      const json = await res.json();
+
+      if (json.error) {
+        statusText.textContent = json.error;
+        dot.className = 'dot error';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Download';
+        return;
+      }
+
+      pollInterval = setInterval(() => poll(json.job_id), 2000);
+    });
+
+    async function poll(jobId) {
+      const res = await fetch(`/status/${jobId}`);
+      const job = await res.json();
+
+      logEl.textContent = (job.log || []).join('\n');
+      logEl.scrollTop = logEl.scrollHeight;
+
+      if (job.status === 'done') {
+        clearInterval(pollInterval);
+        dot.className = 'dot done';
+        statusText.textContent = `Done — ${job.files.length} file(s) ready`;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Download';
+
+        filesEl.innerHTML = '<h3>Files</h3>';
+        job.files.forEach(f => {
+          const a = document.createElement('a');
+          a.href = `/files/${jobId}/${encodeURIComponent(f)}`;
+          a.className = 'file-link';
+          a.download = f;
+          a.innerHTML = `${f} <span>Download</span>`;
+          filesEl.appendChild(a);
+        });
+      } else if (job.status === 'error') {
+        clearInterval(pollInterval);
+        dot.className = 'dot error';
+        statusText.textContent = job.error || 'Something went wrong.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Download';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+import os
+import re
+import shutil
+import subprocess
+import threading
+import time
+import uuid
+
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
+from functools import wraps
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret")
+
+PASSWORD = os.environ.get("APP_PASSWORD", "changeme")
+DOWNLOADS_DIR = "downloads"
+JOBS = {}
+
+SOUNDCLOUD_RE = re.compile(r"soundcloud\.com", re.IGNORECASE)
+SPOTIFY_RE = re.compile(r"open\.spotify\.com", re.IGNORECASE)
+SUPPORTED_FORMATS = ("wav", "aiff", "flac")
+
+os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("authenticated"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        if request.form.get("password") == PASSWORD:
+            session["authenticated"] = True
+            return redirect(url_for("index"))
+        error = "Incorrect password."
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/")
+@login_required
+def index():
+    return render_template("index.html", formats=SUPPORTED_FORMATS)
+
+
+@app.route("/download", methods=["POST"])
+@login_required
+def start_download():
+    url = request.form.get("url", "").strip()
+    fmt = request.form.get("format", "flac")
+
+    if not url:
+        return jsonify({"error": "URL is required."}), 400
+    if fmt not in SUPPORTED_FORMATS:
+        return jsonify({"error": "Invalid format."}), 400
+    if not (SOUNDCLOUD_RE.search(url) or SPOTIFY_RE.search(url)):
+        return jsonify({"error": "URL must be from soundcloud.com or open.spotify.com."}), 400
+
+    job_id = str(uuid.uuid4())
+    job_dir = os.path.join(DOWNLOADS_DIR, job_id)
+    os.makedirs(job_dir)
+
+    JOBS[job_id] = {"status": "running", "files": [], "error": None, "log": []}
+
+    t = threading.Thread(target=_run_download, args=(job_id, url, fmt, job_dir), daemon=True)
+    t.start()
+
+    return jsonify({"job_id": job_id})
+
+
+def _run_download(job_id, url, fmt, job_dir):
+    try:
+        if SOUNDCLOUD_RE.search(url):
+            cmd = [
+                "yt-dlp",
+                "--extract-audio",
+                "--audio-format", fmt,
+                "--audio-quality", "0",
+                "--output", os.path.join(job_dir, "%(playlist_index)s - %(title)s.%(ext)s"),
+                "--yes-playlist",
+                "--no-overwrites",
+                url,
+            ]
+        else:
+            cmd = [
+                "spotdl",
+                "--format", fmt,
+                "--output", os.path.join(job_dir, "{title}"),
+                url,
+            ]
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for line in proc.stdout:
+            JOBS[job_id]["log"].append(line.rstrip())
+        proc.wait()
+
+        if proc.returncode != 0:
+            JOBS[job_id]["status"] = "error"
+            JOBS[job_id]["error"] = "Download failed — check the log for details."
+            return
+
+        audio_exts = {".wav", ".aiff", ".flac", ".mp3", ".ogg"}
+        files = sorted(
+            f for f in os.listdir(job_dir)
+            if os.path.splitext(f)[1].lower() in audio_exts
+        )
+        JOBS[job_id]["files"] = files
+        JOBS[job_id]["status"] = "done"
+
+        # auto-delete files after 2 hours
+        def cleanup():
+            time.sleep(7200)
+            shutil.rmtree(job_dir, ignore_errors=True)
+            JOBS.pop(job_id, None)
+
+        threading.Thread(target=cleanup, daemon=True).start()
+
+    except Exception as exc:
+        JOBS[job_id]["status"] = "error"
+        JOBS[job_id]["error"] = str(exc)
+
+
+@app.route("/status/<job_id>")
+@login_required
+def job_status(job_id):
+    job = JOBS.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found."}), 404
+    return jsonify(job)
+
+
+@app.route("/files/<job_id>/<filename>")
+@login_required
+def download_file(job_id, filename):
+    job_dir = os.path.abspath(os.path.join(DOWNLOADS_DIR, job_id))
+    filepath = os.path.abspath(os.path.join(job_dir, filename))
+
+    # prevent path traversal
+    if not filepath.startswith(job_dir + os.sep):
+        return "Forbidden", 403
+    if not os.path.isfile(filepath):
+        return "File not found", 404
+
+    return send_file(filepath, as_attachment=True)
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
