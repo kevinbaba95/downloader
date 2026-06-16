@@ -100,8 +100,9 @@ def _run_download(job_id, url, fmt, job_dir):
                 "--output", os.path.join(job_dir, "%(playlist_index)s - %(title)s.%(ext)s"),
                 "--yes-playlist",
                 "--no-overwrites",
-                "--newline",       # force one progress line per newline
+                "--newline",
                 "--no-colors",
+                "--socket-timeout", "30",
                 url,
             ]
         else:
@@ -112,17 +113,35 @@ def _run_download(job_id, url, fmt, job_dir):
                 url,
             ]
 
+        env = {**os.environ, "PYTHONUNBUFFERED": "1"}
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,  # line-buffered
+            bufsize=0,
+            env=env,
         )
-        for line in proc.stdout:
-            clean = line.replace("\r", "\n").strip()
-            if clean:
-                JOBS[job_id]["log"].append(clean)
+
+        buf = b""
+        while True:
+            try:
+                chunk = os.read(proc.stdout.fileno(), 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            buf += chunk
+            parts = re.split(rb"[\r\n]+", buf)
+            for part in parts[:-1]:
+                line = part.decode("utf-8", errors="replace").strip()
+                if line:
+                    JOBS[job_id]["log"].append(line)
+            buf = parts[-1]
+        if buf:
+            line = buf.decode("utf-8", errors="replace").strip()
+            if line:
+                JOBS[job_id]["log"].append(line)
+
         proc.wait()
 
         if proc.returncode != 0:
