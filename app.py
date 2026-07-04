@@ -8,6 +8,7 @@ Web UI + API for downloading from SoundCloud, Spotify, and YouTube.
 - Playlists (more than one file) are compressed into a single .7z archive.
 """
 
+import os
 import re
 import shutil
 import subprocess
@@ -294,4 +295,5 @@ def job_file(job_id):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)  # 0.0.0.0 so Docker can expose it
+    # 0.0.0.0 so Docker/Railway can expose it; PORT is set by hosting platforms
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
