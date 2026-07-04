@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Downloader — SoundCloud · Spotify · YouTube</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="shell">
+  <header class="masthead">
+    <div class="wordmark">
+      <span class="wordmark-glyph" aria-hidden="true">▙</span>
+      <h1>Downloader</h1>
+    </div>
+    <p class="tagline">SoundCloud, Spotify &amp; YouTube — tracks, playlists, lossless audio or video.</p>
+  </header>
+
+  <section class="panel" aria-label="Download form">
+    <div class="input-row">
+      <div class="url-field">
+        <input id="url" type="url" spellcheck="false" autocomplete="off"
+               placeholder="Paste a SoundCloud, Spotify or YouTube link…"
+               aria-label="Link to download">
+        <span id="source-badge" class="source-badge" hidden></span>
+      </div>
+      <button id="clear-btn" class="btn btn-ghost" type="button"
+              title="Clear the link and the output">✕ Clear</button>
+    </div>
+
+    <div class="options">
+      <div class="segmented" role="radiogroup" aria-label="Download type">
+        <button type="button" class="seg-btn active" data-mode="audio">Audio</button>
+        <button type="button" class="seg-btn" data-mode="video">Video</button>
+      </div>
+
+      <div id="audio-options" class="option-group">
+        <label class="option">
+          <span class="option-label">Format</span>
+          <select id="audio-format">
+            <option value="flac" selected>FLAC (lossless, smaller)</option>
+            <option value="wav">WAV (uncompressed)</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="video-options" class="option-group" hidden>
+        <label class="option">
+          <span class="option-label">Min resolution</span>
+          <select id="min-res">
+            <option value="144">144p</option>
+            <option value="240">240p</option>
+            <option value="360" selected>360p</option>
+            <option value="480">480p</option>
+            <option value="720">720p</option>
+            <option value="1080">1080p</option>
+            <option value="1440">1440p</option>
+            <option value="2160">2160p (4K)</option>
+          </select>
+        </label>
+        <label class="option">
+          <span class="option-label">Max resolution</span>
+          <select id="max-res">
+            <option value="144">144p</option>
+            <option value="240">240p</option>
+            <option value="360">360p</option>
+            <option value="480">480p</option>
+            <option value="720">720p</option>
+            <option value="1080" selected>1080p</option>
+            <option value="1440">1440p</option>
+            <option value="2160">2160p (4K)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <button id="download-btn" class="btn btn-primary" type="button">
+      <span class="btn-label">Download</span>
+    </button>
+  </section>
+
+  <section id="output" class="panel output" hidden aria-live="polite">
+    <div id="progress-block">
+      <div class="progress-head">
+        <span id="progress-message" class="progress-message">Starting…</span>
+        <span id="progress-percent" class="progress-percent"></span>
+      </div>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <ul id="skipped-list" class="skipped" hidden></ul>
+    </div>
+
+    <div id="result-block" hidden>
+      <p class="result-note">✓ <span id="result-filename"></span> is ready.
+        Playlists arrive as a single <code>.7z</code> archive.</p>
+      <a id="save-btn" class="btn btn-primary" href="#" download>Save file</a>
+    </div>
+
+    <div id="error-block" class="error" hidden>
+      <strong>Couldn't download this.</strong>
+      <p id="error-message"></p>
+    </div>
+  </section>
+
+  <footer class="footnote">
+    Only download content you have the rights to save. Spotify downloads are
+    matched via YouTube Music by <code>spotdl</code>.
+  </footer>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

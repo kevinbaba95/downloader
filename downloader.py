@@ -13,7 +13,7 @@ import re
 SOUNDCLOUD_PATTERN = re.compile(r"soundcloud\.com", re.IGNORECASE)
 SPOTIFY_PATTERN = re.compile(r"open\.spotify\.com", re.IGNORECASE)
 
-SUPPORTED_FORMATS = ("wav", "aiff", "flac")
+SUPPORTED_FORMATS = ("wav", "flac")
 
 
 def check_dependency(command: str) -> bool:
@@ -30,15 +30,16 @@ def download_soundcloud(url: str, fmt: str, output_dir: str) -> None:
     if not check_dependency("ffmpeg"):
         sys.exit("Error: ffmpeg is not installed. Install it via your package manager.")
 
-    # yt-dlp audio format mapping
-    codec_map = {"wav": "wav", "aiff": "aiff", "flac": "flac"}
-    codec = codec_map[fmt]
-
     cmd = [
         "yt-dlp",
         "--extract-audio",
-        "--audio-format", codec,
+        "--audio-format", fmt,
         "--audio-quality", "0",
+        # Rate-limit resilience: retry with backoff, pace requests
+        "--retries", "10",
+        "--fragment-retries", "10",
+        "--retry-sleep", "http:exp=3:60",
+        "--sleep-requests", "0.75",
         "--output", f"{output_dir}/%(uploader)s/%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s",
         "--yes-playlist",
         "--no-overwrites",
@@ -60,6 +61,7 @@ def download_spotify(url: str, fmt: str, output_dir: str) -> None:
         "spotdl",
         "--format", fmt,
         "--output", f"{output_dir}/{{artist}}/{{album}}/{{track-number}} - {{title}}",
+        "--max-retries", "8",
         url,
     ]
 
