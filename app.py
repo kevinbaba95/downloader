@@ -155,13 +155,22 @@ def build_ytdlp_options(job_id: str, job_dir: Path, mode: str,
         "fragment_retries": 10,
         "extractor_retries": 5,
         "retry_sleep_functions": {
-            "http": lambda n: min(3 * (2 ** n), 60),
-            "fragment": lambda n: min(3 * (2 ** n), 60),
-            "extractor": lambda n: min(3 * (2 ** n), 60),
+            "http": lambda n: min(5 * (2 ** n), 120),
+            "fragment": lambda n: min(5 * (2 ** n), 120),
+            "extractor": lambda n: min(5 * (2 ** n), 120),
         },
-        "sleep_interval_requests": 0.75,
+        "sleep_interval_requests": 1.5,
+        # Pause between tracks so playlist downloads don't trip rate limits
+        # (hosting providers' shared IPs get throttled much faster than home IPs)
+        "sleep_interval": 3,
+        "max_sleep_interval": 8,
         "concurrent_fragment_downloads": 1,
     }
+    # Optional cookies lift YouTube's "confirm you're not a bot" checks that
+    # datacenter IPs often hit. Set YTDLP_COOKIES to a cookies.txt path.
+    cookies = os.environ.get("YTDLP_COOKIES")
+    if cookies and Path(cookies).is_file():
+        options["cookiefile"] = cookies
     if mode == "audio":
         options["format"] = "bestaudio/best"
         options["postprocessors"] = [{
