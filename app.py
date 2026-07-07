@@ -83,6 +83,7 @@ class TrackErrorLogger:
     def __init__(self, job_id: str):
         self.job_id = job_id
         self.errors: list[str] = []
+        self.raw: list[str] = []
 
     def debug(self, msg):
         pass
@@ -95,6 +96,7 @@ class TrackErrorLogger:
 
     def error(self, msg):
         print(f"[job {self.job_id}] track error: {msg}", flush=True)
+        self.raw.append(str(msg))
         self.errors.append(friendly_error(str(msg)))
         update_job(self.job_id, skipped=list(self.errors))
 
@@ -192,8 +194,13 @@ def run_ytdlp_job(job_id: str, url: str, job_dir: Path, mode: str,
                   audio_format: str, min_res: int, max_res: int) -> None:
     options = build_ytdlp_options(job_id, job_dir, mode, audio_format,
                                   min_res, max_res)
+    logger = options["logger"]
     with yt_dlp.YoutubeDL(options) as ydl:
         ydl.download([url])
+    # ignoreerrors swallows per-track failures; if nothing at all was
+    # downloaded, surface the first real error instead of a generic message.
+    if not any(p.is_file() for p in job_dir.rglob("*")) and logger.raw:
+        raise RuntimeError(logger.raw[0])
 
 
 def run_spotify_job(job_id: str, url: str, job_dir: Path,
