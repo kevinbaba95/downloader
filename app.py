@@ -55,7 +55,8 @@ def friendly_error(raw: str) -> str:
     """Translate raw downloader errors into messages a user can act on."""
     text = raw or ""
     checks = [
-        (r"429|rate.?limit", "The service is rate-limiting us right now. The downloader already retried with increasing delays — wait a few minutes and try again."),
+        (r"DRM", "This track is DRM-protected (major-label content served with encrypted streams). It cannot be downloaded — try the artist's independent releases or another upload."),
+        (r"429|rate.?limit","The service is rate-limiting us right now. The downloader already retried with increasing delays — wait a few minutes and try again."),
         (r"HTTP Error 401|not authorized|login required|private", "This file is private or requires a login, so it can't be downloaded."),
         (r"HTTP Error 403|forbidden|geo.?(restrict|block)", "Access to this file is blocked (region-locked or forbidden by the platform)."),
         (r"HTTP Error 404|not found|does not exist|unavailable", "This file was not found — the link may be dead, deleted, or mistyped."),
