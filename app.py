@@ -94,6 +94,7 @@ class TrackErrorLogger:
         pass
 
     def error(self, msg):
+        print(f"[job {self.job_id}] track error: {msg}", flush=True)
         self.errors.append(friendly_error(str(msg)))
         update_job(self.job_id, skipped=list(self.errors))
 
@@ -237,6 +238,8 @@ def run_job(job_id: str, url: str, source: str, mode: str,
                    message="Ready to save.", filename=deliverable.name,
                    path=str(deliverable))
     except Exception as exc:  # surfaced to the UI as a clear message
+        import traceback
+        print(f"[job {job_id}] failed: {exc}\n{traceback.format_exc()}", flush=True)
         update_job(job_id, status="error", error=friendly_error(str(exc)))
         shutil.rmtree(job_dir, ignore_errors=True)
 
