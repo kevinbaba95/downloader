@@ -177,6 +177,11 @@ def build_ytdlp_options(job_id: str, job_dir: Path, mode: str,
     cookies = os.environ.get("YTDLP_COOKIES") or str(BASE_DIR / "cookies.txt")
     if Path(cookies).is_file():
         options["cookiefile"] = cookies
+        print(f"[cookies] using {cookies}", flush=True)
+    else:
+        print(f"[cookies] NOT FOUND (looked for {cookies}) — "
+              "SoundCloud may report false DRM errors without login cookies",
+              flush=True)
     if mode == "audio":
         options["format"] = "bestaudio/best"
         options["postprocessors"] = [{
@@ -314,6 +319,16 @@ def job_file(job_id):
         return jsonify(error="File not ready."), 404
     return send_file(job["path"], as_attachment=True,
                      download_name=job["filename"])
+
+
+@app.get("/api/health")
+def health():
+    cookies = os.environ.get("YTDLP_COOKIES") or str(BASE_DIR / "cookies.txt")
+    return jsonify(
+        ytdlp_version=yt_dlp.version.__version__,
+        cookies_file=cookies,
+        cookies_found=Path(cookies).is_file(),
+    )
 
 
 if __name__ == "__main__":
