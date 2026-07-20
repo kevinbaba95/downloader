@@ -55,7 +55,7 @@ def friendly_error(raw: str) -> str:
     """Translate raw downloader errors into messages a user can act on."""
     text = raw or ""
     checks = [
-        (r"DRM", "This track is DRM-protected (major-label content served with encrypted streams). It cannot be downloaded — try the artist's independent releases or another upload."),
+        (r"DRM", "SoundCloud flagged this as DRM-protected. For major-label tracks that's real and can't be bypassed — but SoundCloud currently also reports this for normal tracks when you're not logged in. Fix: export a cookies.txt from a browser logged into SoundCloud (e.g. the 'Get cookies.txt LOCALLY' extension), save it next to app.py as cookies.txt, and restart the app. Also make sure yt-dlp is up to date: pip install -U yt-dlp"),
         (r"429|rate.?limit","The service is rate-limiting us right now. The downloader already retried with increasing delays — wait a few minutes and try again."),
         (r"HTTP Error 401|not authorized|login required|private", "This file is private or requires a login, so it can't be downloaded."),
         (r"HTTP Error 403|forbidden|geo.?(restrict|block)", "Access to this file is blocked (region-locked or forbidden by the platform)."),
@@ -170,10 +170,12 @@ def build_ytdlp_options(job_id: str, job_dir: Path, mode: str,
         "max_sleep_interval": 8,
         "concurrent_fragment_downloads": 1,
     }
-    # Optional cookies lift YouTube's "confirm you're not a bot" checks that
-    # datacenter IPs often hit. Set YTDLP_COOKIES to a cookies.txt path.
-    cookies = os.environ.get("YTDLP_COOKIES")
-    if cookies and Path(cookies).is_file():
+    # Cookies from a logged-in browser session fix two common blocks:
+    # SoundCloud's false "DRM protected" errors for anonymous clients, and
+    # YouTube's bot checks on datacenter IPs. Uses $YTDLP_COOKIES, or a
+    # cookies.txt placed next to app.py.
+    cookies = os.environ.get("YTDLP_COOKIES") or str(BASE_DIR / "cookies.txt")
+    if Path(cookies).is_file():
         options["cookiefile"] = cookies
     if mode == "audio":
         options["format"] = "bestaudio/best"

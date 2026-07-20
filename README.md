@@ -41,6 +41,20 @@ single tracks download directly, playlists as `playlist.7z`.
 python downloader.py <URL> -f flac -o downloads
 ```
 
+## SoundCloud says everything is "DRM protected"?
+
+SoundCloud currently reports false DRM errors for anonymous clients
+(see yt-dlp issues #16755/#16603). Fix:
+
+1. Keep yt-dlp current: `pip install -U yt-dlp`
+2. Log into soundcloud.com in your browser, export cookies with a
+   "cookies.txt" extension (e.g. *Get cookies.txt LOCALLY*), and save the
+   file as `cookies.txt` next to `app.py`
+3. Restart the app — it picks the file up automatically
+   (or set `YTDLP_COOKIES=/path/to/cookies.txt`)
+
+Genuine DRM (major-label Go+ streams) still can't be downloaded.
+
 ## Notes
 
 - Spotify has no public audio downloads; `spotdl` matches each track via
