@@ -145,7 +145,7 @@ def archive_if_playlist(job_id: str, job_dir: Path) -> Path:
     return archive_path
 
 
-def build_ytdlp_options(job_id: str, job_dir: Path, mode: str,
+def build_ytdlp_options(job_id: str, job_dir: Path, source: str, mode: str,
                         audio_format: str, min_res: int, max_res: int) -> dict:
     options = {
         "outtmpl": str(job_dir / "%(playlist_index&{} - |)s%(title)s.%(ext)s"),
@@ -170,18 +170,19 @@ def build_ytdlp_options(job_id: str, job_dir: Path, mode: str,
         "max_sleep_interval": 8,
         "concurrent_fragment_downloads": 1,
     }
-    # Cookies from a logged-in browser session fix two common blocks:
-    # SoundCloud's false "DRM protected" errors for anonymous clients, and
-    # YouTube's bot checks on datacenter IPs. Uses $YTDLP_COOKIES, or a
-    # cookies.txt placed next to app.py.
-    cookies = os.environ.get("YTDLP_COOKIES") or str(BASE_DIR / "cookies.txt")
-    if Path(cookies).is_file():
-        options["cookiefile"] = cookies
-        print(f"[cookies] using {cookies}", flush=True)
-    else:
-        print(f"[cookies] NOT FOUND (looked for {cookies}) — "
-              "SoundCloud may report false DRM errors without login cookies",
-              flush=True)
+    # Cookies from a logged-in session fix SoundCloud's false "DRM protected"
+    # errors — but must NOT be sent to YouTube: logged-in YouTube cookies
+    # switch it to SABR streaming, which hides normal formats and breaks
+    # downloads with "Requested format is not available".
+    if source == "soundcloud":
+        cookies = os.environ.get("YTDLP_COOKIES") or str(BASE_DIR / "cookies.txt")
+        if Path(cookies).is_file():
+            options["cookiefile"] = cookies
+            print(f"[cookies] using {cookies}", flush=True)
+        else:
+            print(f"[cookies] NOT FOUND (looked for {cookies}) — "
+                  "SoundCloud may report false DRM errors without login cookies",
+                  flush=True)
     if mode == "audio":
         options["format"] = "bestaudio/best"
         options["postprocessors"] = [{
@@ -198,9 +199,9 @@ def build_ytdlp_options(job_id: str, job_dir: Path, mode: str,
     return options
 
 
-def run_ytdlp_job(job_id: str, url: str, job_dir: Path, mode: str,
+def run_ytdlp_job(job_id: str, url: str, job_dir: Path, source: str, mode: str,
                   audio_format: str, min_res: int, max_res: int) -> None:
-    options = build_ytdlp_options(job_id, job_dir, mode, audio_format,
+    options = build_ytdlp_options(job_id, job_dir, source, mode, audio_format,
                                   min_res, max_res)
     logger = options["logger"]
     with yt_dlp.YoutubeDL(options) as ydl:
@@ -246,7 +247,7 @@ def run_job(job_id: str, url: str, source: str, mode: str,
         if source == "spotify":
             run_spotify_job(job_id, url, job_dir, audio_format)
         else:
-            run_ytdlp_job(job_id, url, job_dir, mode, audio_format,
+            run_ytdlp_job(job_id, url, job_dir, source, mode, audio_format,
                           min_res, max_res)
         deliverable = archive_if_playlist(job_id, job_dir)
         update_job(job_id, status="done", percent=100,
